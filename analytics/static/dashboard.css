@@ -1,0 +1,359 @@
+/* ──────────────────────────────────────────────────────────────────────
+   VPN Analytics — дизайн-токены
+
+   Палитра  : фон глубокий сине-чёрный (#0B0E14), панели чуть светлее
+              (#12151D), акцент — холодный циан-зелёный (#5EEAD4),
+              предупреждение — янтарный (#F5A524), хорошо — мятный (#34D399).
+   Шрифт    : "Spline Sans" для интерфейса (чёткая, geometric grotesk,
+              читается на мелких лейблах), "JetBrains Mono" для всех
+              чисел/метрик — это операторская консоль, числа должны
+              выглядеть как телеметрия, а не как текст.
+   Сигнатура: пунктирная "сетка радара" на фоне (едва заметная) + точка
+              "live" с дыханием в шапке — единственный анимационный акцент.
+   ────────────────────────────────────────────────────────────────────── */
+
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Spline+Sans:wght@400;500;600;700&display=swap');
+
+:root {
+  --bg: #0B0E14;
+  --panel: #12151D;
+  --panel-border: #1E2230;
+  --text: #E7E9EE;
+  --text-dim: #8B92A4;
+  --text-faint: #565D70;
+  --accent: #5EEAD4;
+  --accent-dim: #1F4D47;
+  --good: #34D399;
+  --warn: #F5A524;
+  --bad: #F25555;
+  --grid-line: rgba(255, 255, 255, 0.05);
+  --font-ui: 'Spline Sans', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', 'SF Mono', monospace;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-ui);
+  -webkit-font-smoothing: antialiased;
+}
+
+body {
+  min-height: 100vh;
+  padding-bottom: 40px;
+}
+
+::selection { background: var(--accent-dim); color: var(--accent); }
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Едва заметная радарная сетка по всему фону — сигнатурный элемент */
+.grain {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background-image:
+    linear-gradient(var(--grid-line) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid-line) 1px, transparent 1px);
+  background-size: 48px 48px;
+  mask-image: radial-gradient(ellipse 80% 60% at 50% 0%, black 0%, transparent 70%);
+}
+
+/* ── Topbar ─────────────────────────────────────────────────────────── */
+
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 28px;
+  background: rgba(11, 14, 20, 0.85);
+  backdrop-filter: blur(8px);
+  border-bottom: 1px solid var(--panel-border);
+}
+
+.topbar-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--good);
+  box-shadow: 0 0 0 0 rgba(52, 211, 153, 0.6);
+  animation: breathe 2.4s ease-in-out infinite;
+}
+
+.dot.stale { background: var(--warn); animation: none; }
+
+@keyframes breathe {
+  0%   { box-shadow: 0 0 0 0 rgba(52, 211, 153, 0.5); }
+  70%  { box-shadow: 0 0 0 6px rgba(52, 211, 153, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(52, 211, 153, 0); }
+}
+
+.brand {
+  font-weight: 600;
+  font-size: 14px;
+  letter-spacing: 0.08em;
+  color: var(--text);
+}
+.brand-accent { color: var(--accent); }
+
+.topbar-right {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+.clock {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-faint);
+}
+
+.range-switch {
+  display: flex;
+  gap: 2px;
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  border-radius: 8px;
+  padding: 3px;
+}
+
+.range-switch button {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-dim);
+  background: transparent;
+  border: none;
+  padding: 5px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.range-switch button:hover { color: var(--text); }
+.range-switch button.active {
+  background: var(--accent-dim);
+  color: var(--accent);
+}
+
+/* ── Layout ─────────────────────────────────────────────────────────── */
+
+main {
+  max-width: 1320px;
+  margin: 0 auto;
+  padding: 28px;
+  position: relative;
+  z-index: 1;
+}
+
+/* ── KPI row ────────────────────────────────────────────────────────── */
+
+.kpi-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.kpi {
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  border-radius: 12px;
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  position: relative;
+  overflow: hidden;
+}
+
+.kpi::before {
+  content: "";
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  width: 2px;
+  background: var(--text-faint);
+}
+
+.kpi.accent-good::before { background: var(--good); }
+.kpi.accent-warn::before { background: var(--warn); }
+
+.kpi-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-dim);
+}
+
+.kpi-value {
+  font-family: var(--font-mono);
+  font-size: 28px;
+  font-weight: 600;
+  line-height: 1;
+  color: var(--text);
+}
+
+.accent-good .kpi-value { color: var(--good); }
+.accent-warn .kpi-value { color: var(--warn); }
+
+.kpi-sub {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-faint);
+}
+
+/* ── Panels ─────────────────────────────────────────────────────────── */
+
+.panel-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--panel-border);
+  border-radius: 14px;
+  padding: 20px 22px 16px;
+  min-width: 0;
+}
+
+.panel-wide { grid-column: span 1; }
+
+.panel-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+
+/* Chart.js с maintainAspectRatio:false требует, чтобы РОДИТЕЛЬ канваса
+   имел жёстко заданную высоту — иначе канвас и контейнер начинают
+   бесконечно "догонять" друг друга по размеру (resize loop), из-за
+   чего страница растёт вниз без остановки и грузит браузер. */
+.chart-wrap {
+  position: relative;
+  height: 220px;
+  width: 100%;
+}
+
+.chart-wrap canvas {
+  position: absolute;
+  inset: 0;
+}
+
+.panel-head h2 {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--text);
+  margin: 0;
+}
+
+.panel-meta {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-faint);
+}
+
+/* ── Top clients list ───────────────────────────────────────────────── */
+
+.top-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.top-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+}
+
+.top-row .name {
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.top-row .name .tg-id {
+  color: var(--text-faint);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  margin-left: 6px;
+}
+
+.top-row .value {
+  font-family: var(--font-mono);
+  color: var(--accent);
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.top-bar-track {
+  grid-column: 1 / -1;
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(255,255,255,0.06);
+  overflow: hidden;
+}
+
+.top-bar-fill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 2px;
+}
+
+.empty-state {
+  color: var(--text-faint);
+  font-size: 13px;
+  padding: 24px 0;
+  text-align: center;
+}
+
+/* ── Footer ─────────────────────────────────────────────────────────── */
+
+footer {
+  text-align: center;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-faint);
+  padding-top: 8px;
+}
+
+/* ── Responsive ─────────────────────────────────────────────────────── */
+
+@media (max-width: 980px) {
+  .kpi-row { grid-template-columns: repeat(3, 1fr); }
+  .panel-grid { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 560px) {
+  .kpi-row { grid-template-columns: repeat(2, 1fr); }
+  .topbar { padding: 14px 16px; }
+  main { padding: 16px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dot { animation: none; }
+}

@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>VPN · Аналитика</title>
+<link rel="stylesheet" href="/static/dashboard.css">
+<script src="/static/chart.umd.js"></script>
+</head>
+<body>
+
+<div class="grain"></div>
+
+<header class="topbar">
+  <div class="topbar-left">
+    <span class="dot" id="live-dot"></span>
+    <span class="brand">VPN<span class="brand-accent">·</span>АНАЛИТИКА</span>
+  </div>
+  <div class="topbar-right">
+    <span class="clock" id="clock">—</span>
+    <div class="range-switch" id="range-switch">
+      <button data-range="24h">24ч</button>
+      <button data-range="7d" class="active">7д</button>
+      <button data-range="30d">30д</button>
+      <button data-range="90d">90д</button>
+    </div>
+  </div>
+</header>
+
+<main>
+
+  <!-- ── Верхняя строка: ключевые метрики сейчас ───────────────────────── -->
+  <section class="kpi-row">
+    <div class="kpi">
+      <span class="kpi-label">Пользователи</span>
+      <span class="kpi-value" id="kpi-total-users">—</span>
+      <span class="kpi-sub" id="kpi-total-users-sub">&nbsp;</span>
+    </div>
+    <div class="kpi accent-good">
+      <span class="kpi-label">Активные подписки</span>
+      <span class="kpi-value" id="kpi-active-subs">—</span>
+      <span class="kpi-sub" id="kpi-active-subs-sub">&nbsp;</span>
+    </div>
+    <div class="kpi accent-warn">
+      <span class="kpi-label">Истекли</span>
+      <span class="kpi-value" id="kpi-expired-subs">—</span>
+    </div>
+    <div class="kpi">
+      <span class="kpi-label">Устройства</span>
+      <span class="kpi-value" id="kpi-devices">—</span>
+    </div>
+    <div class="kpi accent-good">
+      <span class="kpi-label">Онлайн сейчас</span>
+      <span class="kpi-value" id="kpi-online">—</span>
+    </div>
+    <div class="kpi">
+      <span class="kpi-label">Рефералов привели</span>
+      <span class="kpi-value" id="kpi-referrals">—</span>
+    </div>
+    <div class="kpi accent-good">
+      <span class="kpi-label">Выручка за период</span>
+      <span class="kpi-value" id="kpi-revenue">—</span>
+      <span class="kpi-sub" id="kpi-revenue-sub">&nbsp;</span>
+    </div>
+  </section>
+
+  <!-- ── Сервер: CPU / RAM / диск / сеть ──────────────────────────────── -->
+  <section class="panel-grid">
+
+    <div class="panel">
+      <div class="panel-head">
+        <h2>Нагрузка сервера</h2>
+        <span class="panel-meta" id="server-meta">—</span>
+      </div>
+      <div class="chart-wrap"><canvas id="chart-cpu"></canvas></div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head">
+        <h2>Память</h2>
+        <span class="panel-meta" id="mem-meta">—</span>
+      </div>
+      <div class="chart-wrap"><canvas id="chart-mem"></canvas></div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head">
+        <h2>Сетевой трафик панели</h2>
+        <span class="panel-meta">байт/сек, мгновенно</span>
+      </div>
+      <div class="chart-wrap"><canvas id="chart-net"></canvas></div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head">
+        <h2>Онлайн-клиенты VPN</h2>
+        <span class="panel-meta">одновременных подключений</span>
+      </div>
+      <div class="chart-wrap"><canvas id="chart-online"></canvas></div>
+    </div>
+
+  </section>
+
+  <!-- ── Пользователи / подписки во времени ───────────────────────────── -->
+  <section class="panel-grid">
+
+    <div class="panel panel-wide">
+      <div class="panel-head">
+        <h2>Пользователи и подписки</h2>
+        <span class="panel-meta">срез во времени по снапшотам</span>
+      </div>
+      <div class="chart-wrap"><canvas id="chart-users"></canvas></div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head">
+        <h2>Реферальная программа</h2>
+        <span class="panel-meta">приглашено / с бонусом</span>
+      </div>
+      <div class="chart-wrap"><canvas id="chart-referrals"></canvas></div>
+    </div>
+
+  </section>
+
+  <!-- ── Трафик: общий объём + топ клиентов ───────────────────────────── -->
+  <section class="panel-grid">
+
+    <div class="panel panel-wide">
+      <div class="panel-head">
+        <h2>Суммарный трафик VPN-клиентов</h2>
+        <span class="panel-meta">накопительно, ГБ за период между снапшотами</span>
+      </div>
+      <div class="chart-wrap"><canvas id="chart-traffic-total"></canvas></div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head">
+        <h2>Топ устройств по трафику</h2>
+        <span class="panel-meta" id="top-clients-meta">за период</span>
+      </div>
+      <div id="top-clients-list" class="top-list">
+        <div class="empty-state">Загрузка…</div>
+      </div>
+    </div>
+
+  </section>
+
+  <!-- ── Оплаты ────────────────────────────────────────────────────────── -->
+  <section class="panel-grid">
+
+    <div class="panel panel-wide">
+      <div class="panel-head">
+        <h2>Оплаты по дням</h2>
+        <span class="panel-meta" id="payments-meta">за период</span>
+      </div>
+      <div class="chart-wrap"><canvas id="chart-payments"></canvas></div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head">
+        <h2>По способам оплаты</h2>
+        <span class="panel-meta">за период</span>
+      </div>
+      <div id="payments-by-method-list" class="top-list">
+        <div class="empty-state">Загрузка…</div>
+      </div>
+    </div>
+
+  </section>
+
+</main>
+
+<footer>
+  <span>обновление каждые 60 сек · данные собираются раз в 15 мин</span>
+</footer>
+
+<script src="/static/dashboard.js"></script>
+</body>
+</html>
