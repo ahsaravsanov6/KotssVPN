@@ -22,7 +22,11 @@ from aiogram import F, Router
 from aiogram.types import CallbackQuery, Message
 
 from bot.handlers.account import _format_expires_at, _format_subscription_status
-from bot.keyboards.keyboards import buy_subscription_keyboard, offer_confirmation_keyboard
+from bot.keyboards.keyboards import (
+    buy_subscription_keyboard,
+    offer_confirmation_keyboard,
+    payment_success_keyboard,
+)
 from bot.services.api_client import BackendAPIError, api_client
 from config import settings
 
@@ -31,19 +35,22 @@ logger = logging.getLogger(__name__)
 router = Router(name="subscription")
 
 
-def _build_subscription_text(data: dict) -> tuple[str, bool]:
+def _build_subscription_text(data: dict) -> tuple[str, bool, bool]:
     """
     Формирует текст единого экрана подписки.
 
     Returns:
-        (текст, has_active_subscription) — флаг нужен клавиатуре, чтобы
-        показать «Оплатить» (нет подписки) или «Продлить» + переход в VPN
-        (подписка активна).
+        (текст, has_active_subscription, trial_available) — флаги нужны
+        клавиатуре, чтобы показать «Оплатить» (нет подписки) или
+        «Продлить» + переход в VPN (подписка активна), а также кнопку
+        пробного периода, если он включён в .env (TRIAL_ENABLED) и ещё
+        не был использован пользователем (проверяет backend).
     """
     status = data.get("subscription_status", "none")
     sub_status = _format_subscription_status(status)
     expires_at = _format_expires_at(data.get("subscription_expires_at"))
     is_active = status == "active"
+    trial_available = bool(getattr(settings, "TRIAL_ENABLED", False)) and bool(data.get("trial_available"))
 
     header = (
         f"💳 <b>Подписка</b>\n\n"
@@ -64,13 +71,19 @@ def _build_subscription_text(data: dict) -> tuple[str, bool]:
 
     if is_active:
         footer = "✅ Ваш VPN активен. Хотите продлить заранее — нажмите кнопку ниже."
+    elif trial_available:
+        footer = (
+            f"🎁 Вам доступен бесплатный пробный период на {settings.TRIAL_DAYS} дн. — "
+            "попробуйте VPN перед покупкой!\n\n"
+            "Нажмите <b>✅ Оплатить</b>, чтобы купить сразу, или возьмите пробный период выше."
+        )
     else:
         footer = "Нажмите <b>✅ Оплатить</b>, чтобы продолжить."
 
-    return header + plan_details + footer, is_active
+    return header + plan_details + footer, is_active, trial_available
 
 
-async def _show_subscription_screen(telegram_id: int) -> tuple[str, bool]:
+async def _show_subscription_screen(telegram_id: int) -> tuple[str, bool, bool]:
     """Запрашивает статус подписки у backend и собирает текст экрана."""
     try:
         data = await api_client.get_account(telegram_id=telegram_id)
@@ -84,10 +97,10 @@ async def _show_subscription_screen(telegram_id: int) -> tuple[str, bool]:
             )
         else:
             text = f"⚠️ Ошибка загрузки данных. Попробуйте позже.\n\n<code>{exc.detail}</code>"
-        return text, False
+        return text, False, False
     except Exception as exc:
         logger.error("subscription: unexpected error for user %d: %s", telegram_id, exc, exc_info=True)
-        return "⚠️ Произошла ошибка. Попробуйте позже.", False
+        return "⚠️ Произошла ошибка. Попробуйте позже.", False, False
 
 
 @router.message(F.text == "💳 Подписка")
@@ -100,11 +113,11 @@ async def handle_subscription_screen(message: Message) -> None:
     if not user:
         return
 
-    text, is_active = await _show_subscription_screen(user.id)
+    text, is_active, trial_available = await _show_subscription_screen(user.id)
 
     await message.answer(
         text=text,
-        reply_markup=buy_subscription_keyboard(has_active_subscription=is_active),
+        reply_markup=buy_subscription_keyboard(has_active_subscription=is_active, trial_available=trial_available),
         parse_mode="HTML",
     )
 
@@ -118,11 +131,11 @@ async def callback_subscription_screen(callback: CallbackQuery) -> None:
     if not user or not callback.message:
         return
 
-    text, is_active = await _show_subscription_screen(user.id)
+    text, is_active, trial_available = await _show_subscription_screen(user.id)
 
     await callback.message.edit_text(
         text=text,
-        reply_markup=buy_subscription_keyboard(has_active_subscription=is_active),
+        reply_markup=buy_subscription_keyboard(has_active_subscription=is_active, trial_available=trial_available),
         parse_mode="HTML",
     )
 
@@ -155,3 +168,67 @@ async def callback_show_offer(callback: CallbackQuery) -> None:
             reply_markup=offer_confirmation_keyboard(offer_url),
             parse_mode="HTML",
         )
+
+
+@router.callback_query(F.data == "subscription:trial")
+async def callback_start_trial(callback: CallbackQuery) -> None:
+    """
+    Активация бесплатного пробного периода — без экрана оферты и без
+    выбора способа оплаты, т.к. деньги не участвуют. Кнопка показывается
+    только если TRIAL_ENABLED=true в .env и backend подтвердил, что
+    пользователь ещё не использовал триал (см. trial_available в
+    /users/account и buy_subscription_keyboard).
+
+    Backend всё равно перепроверяет это сам (см. /subscription/trial) —
+    клавиатура лишь скрывает кнопку, а не является единственной защитой.
+    """
+    await callback.answer()
+
+    user = callback.from_user
+    if not user or not callback.message:
+        return
+
+    if not getattr(settings, "TRIAL_ENABLED", False):
+        await callback.message.answer("⚠️ Пробный период сейчас недоступен.")
+        return
+
+    try:
+        data = await api_client.start_trial(telegram_id=user.id, days=settings.TRIAL_DAYS)
+    except BackendAPIError as exc:
+        logger.error("subscription: trial activation API error for user %d: %s", user.id, exc)
+        await callback.message.answer("⚠️ Не удалось активировать пробный период. Попробуйте позже.")
+        return
+    except Exception as exc:
+        logger.error("subscription: unexpected trial error for user %d: %s", user.id, exc, exc_info=True)
+        await callback.message.answer("⚠️ Произошла ошибка. Попробуйте позже.")
+        return
+
+    if not data.get("success"):
+        # Например: "Пробный период уже был использован." или
+        # "доступен только новым пользователям без подписки."
+        await callback.message.answer(f"ℹ️ {data.get('message', 'Пробный период недоступен.')}")
+        return
+
+    expires_str = _format_expires_at(data.get("expires_at"))
+    days = data.get("days", settings.TRIAL_DAYS)
+
+    await callback.message.answer(
+        text=(
+            f"🎁 <b>Пробный период активирован!</b>\n\n"
+            f"Вам доступен VPN на <b>{days} {_ru_days_word(days)}</b> бесплатно.\n"
+            f"📅 Действует до: <b>{expires_str}</b>\n\n"
+            f"🔑 Добавьте устройство в «Мои устройства», чтобы получить ключ."
+        ),
+        parse_mode="HTML",
+        reply_markup=payment_success_keyboard(),
+    )
+
+
+def _ru_days_word(n: int) -> str:
+    """Правильное склонение слова 'день' для русского языка (1 день, 2 дня, 5 дней)."""
+    n = abs(int(n))
+    if n % 10 == 1 and n % 100 != 11:
+        return "день"
+    if 2 <= n % 10 <= 4 and not (12 <= n % 100 <= 14):
+        return "дня"
+    return "дней"

@@ -16,6 +16,12 @@ class User(Base):
     is_active = Column(Boolean, default=False)
     subscription_expires_at = Column(DateTime, nullable=True)
 
+    # Был ли уже использован пробный период. Выставляется один раз при
+    # активации триала (см. /subscription/trial в main.py) и больше никогда
+    # не сбрасывается — это защита от повторной активации тем же
+    # пользователем (в т.ч. после истечения пробной подписки).
+    trial_used = Column(Boolean, default=False, nullable=False)
+
     # Кто пригласил этого пользователя (telegram_id реферера).
     # Заполняется один раз при регистрации через /start ref_<id> и больше не меняется.
     referrer_id = Column(Integer, ForeignKey("users.telegram_id"), nullable=True)
@@ -99,6 +105,9 @@ with engine.connect() as _conn:
     _existing_cols = {row[1] for row in _conn.exec_driver_sql("PRAGMA table_info(users)")}
     if "extra_devices" not in _existing_cols:
         _conn.exec_driver_sql("ALTER TABLE users ADD COLUMN extra_devices INTEGER NOT NULL DEFAULT 0")
+        _conn.commit()
+    if "trial_used" not in _existing_cols:
+        _conn.exec_driver_sql("ALTER TABLE users ADD COLUMN trial_used BOOLEAN NOT NULL DEFAULT 0")
         _conn.commit()
 
 def get_db():

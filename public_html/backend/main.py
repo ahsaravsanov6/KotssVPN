@@ -90,12 +90,18 @@ async def get_account(telegram_id: int, db: Session = Depends(get_db)):
     if user.subscription_expires_at:
         status = "active" if user.subscription_expires_at > datetime.now() else "expired"
     
+    # Триал доступен, если пользователь ни разу не активировал его
+    # и ещё никогда не оформлял (и не активировал) подписку — иначе
+    # это превратилось бы в способ продлевать подписку бесплатно.
+    trial_available = (not user.trial_used) and (user.subscription_expires_at is None)
+
     return {
         "username": user.username or user.first_name,
         "subscription_status": status,
         "subscription_expires_at": user.subscription_expires_at.isoformat() if user.subscription_expires_at else None,
         "devices_count": devices_count,
-        "max_devices": 3 + user.extra_devices  # Базовый лимит + купленные доп. места
+        "max_devices": 3 + user.extra_devices,  # Базовый лимит + купленные доп. места
+        "trial_available": trial_available,
     }
 
 # --- Эндпоинты подписки ---
@@ -163,6 +169,60 @@ async def buy_sub(data: dict = Body(...), db: Session = Depends(get_db)):
         "message": "Подписка успешно активирована! Добавьте устройство в разделе «Мои устройства», чтобы получить ключ.",
         "referral_bonus_granted": referral_bonus_granted,
         "referrer_id": referrer_id,
+    }
+
+
+@app.post("/subscription/trial", dependencies=[Depends(verify_api_key)])
+async def start_trial(data: dict = Body(...), db: Session = Depends(get_db)):
+    """
+    Активация бесплатного пробного периода.
+
+    Доступна ровно один раз на пользователя: защитой служит флаг
+    User.trial_used (выставляется здесь и никогда не сбрасывается) плюс
+    дополнительная проверка, что у пользователя ещё не было подписки
+    (subscription_expires_at is None) — иначе триал можно было бы
+    использовать как способ бесплатно продлить уже существующую/истёкшую
+    подписку.
+
+    Количество дней триала (TRIAL_DAYS) и включён ли он вообще
+    (TRIAL_ENABLED) — настройки бота, а не backend: бот сам решает,
+    показывать ли кнопку, и передаёт нужное количество дней в `days`.
+    Backend здесь всё равно не доверяет этому значению слепо — если
+    `days` не передан или некорректен, использует разумное значение
+    по умолчанию (3 дня).
+    """
+    tid = data.get("telegram_id")
+    user = db.query(User).filter(User.telegram_id == tid).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    if user.trial_used:
+        return {"success": False, "message": "Пробный период уже был использован."}
+
+    if user.subscription_expires_at is not None:
+        return {
+            "success": False,
+            "message": "Пробный период доступен только новым пользователям без подписки.",
+        }
+
+    try:
+        days = int(data.get("days", 3))
+    except (TypeError, ValueError):
+        days = 3
+    days = max(1, days)
+
+    user.is_active = True
+    user.subscription_expires_at = datetime.now() + timedelta(days=days)
+    user.trial_used = True
+    db.commit()
+
+    logger.info(f"Trial activated: user={tid} days={days} expires_at={user.subscription_expires_at}")
+
+    return {
+        "success": True,
+        "expires_at": user.subscription_expires_at.isoformat(),
+        "days": days,
+        "message": "Пробный период активирован! Добавьте устройство в разделе «Мои устройства», чтобы получить ключ.",
     }
 
 

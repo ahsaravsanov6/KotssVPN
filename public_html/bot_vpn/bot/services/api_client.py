@@ -150,6 +150,21 @@ class APIClient:
             json={"telegram_id": telegram_id},
         )
 
+    async def start_trial(self, telegram_id: int, days: int) -> dict:
+        """
+        POST /subscription/trial
+
+        Активирует бесплатный пробный период. Backend сам проверяет,
+        что пользователь ещё не использовал триал и не имеет (не имел)
+        подписки — повторный вызов вернёт success=False с понятным
+        сообщением, а не ошибку.
+        """
+        return await self._request(
+            "POST",
+            "/subscription/trial",
+            json={"telegram_id": telegram_id, "days": days},
+        )
+
     # ── Referral ──────────────────────────────────────────────────────────────
 
     async def get_referral_stats(self, telegram_id: int) -> dict:
