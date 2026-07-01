@@ -11,6 +11,8 @@ from aiogram.types import (
 )
 from aiogram.utils.keyboard import InlineKeyboardBuilder, ReplyKeyboardBuilder
 
+from config import settings
+
 # ── Ссылки на инструкции (telegra.ph) ──────────────────────────────────────
 INSTRUCTION_URL_IPHONE_MACOS = "https://telegra.ph/IPhone-03-02-5"
 INSTRUCTION_URL_WINDOWS = "https://telegra.ph/Podklyuchenie-VPN-na-Windows-01-12"
@@ -136,7 +138,10 @@ def device_select_keyboard(devices: list[dict], action: str) -> InlineKeyboardMa
 # показ статуса (активна/истекла/нет) и переход к оплате/продлению.
 # Раньше статус дублировался в account.py — теперь там его нет.
 
-def buy_subscription_keyboard(has_active_subscription: bool = False) -> InlineKeyboardMarkup:
+def buy_subscription_keyboard(
+    has_active_subscription: bool = False,
+    trial_available: bool = False,
+) -> InlineKeyboardMarkup:
     """
     Инлайн-клавиатура раздела 'Подписка'.
 
@@ -144,8 +149,21 @@ def buy_subscription_keyboard(has_active_subscription: bool = False) -> InlineKe
         has_active_subscription: если True — пользователь уже имеет активную
             подписку, кнопка ведёт на продление, плюс быстрый переход к VPN.
             Если False — обычная покупка (как раньше).
+        trial_available: если True (и подписки активной нет) — сверху
+            показывается отдельная кнопка пробного периода. Управляется
+            настройками TRIAL_ENABLED в .env бота и тем, использовал ли
+            уже пользователь триал (backend сам это проверяет).
     """
     builder = InlineKeyboardBuilder()
+
+    if trial_available and not has_active_subscription:
+        days = getattr(settings, "TRIAL_DAYS", 3)
+        builder.row(
+            InlineKeyboardButton(
+                text=f"🎁 {days} {_ru_days_word(days)} бесплатно",
+                callback_data="subscription:trial",
+            )
+        )
 
     if has_active_subscription:
         builder.row(InlineKeyboardButton(text="♻️ Продлить подписку", callback_data="subscription:offer"))
@@ -156,6 +174,16 @@ def buy_subscription_keyboard(has_active_subscription: bool = False) -> InlineKe
     builder.row(InlineKeyboardButton(text="◀️ Главное меню", callback_data="menu:main"))
 
     return builder.as_markup()
+
+
+def _ru_days_word(n: int) -> str:
+    """Правильное склонение слова 'день' для русского языка (1 день, 2 дня, 5 дней)."""
+    n = abs(n)
+    if n % 10 == 1 and n % 100 != 11:
+        return "день"
+    if 2 <= n % 10 <= 4 and not (12 <= n % 100 <= 14):
+        return "дня"
+    return "дней"
 
 
 # ── Раздел "Личный кабинет" ───────────────────────────────────────────────────
