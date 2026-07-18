@@ -1,0 +1,13 @@
+fastapi>=0.110
+uvicorn[standard]>=0.27
+sqlalchemy>=2.0
+alembic>=1.13
+pydantic>=2.5
+pydantic-settings>=2.1
+httpx>=0.27
+beautifulsoup4>=4.12
+python-dotenv>=1.0
+pyyaml>=6.0
+psycopg[binary]>=3.1   # для Postgres в проде; для sqlite-dev не обязателен
+pytest>=8.0             # для tests/
+pytest-asyncio>=0.23
